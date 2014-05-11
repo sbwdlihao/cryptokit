@@ -317,6 +317,11 @@ def sha256_int(data):
     return uint256_from_str(hsh)
 
 
+def drk_hash_int(data):
+    hsh = drk_hash(data)
+    return uint256_from_str(hsh)
+
+
 def scrypt(data):
     from ltc_scrypt import getPoWHash
     hsh = getPoWHash(data)
@@ -332,4 +337,9 @@ def vert_scrypt(data):
 def sha256d(data):
     hsh = sha256(sha256(data).digest()).digest()
     return hsh
+
+
+def drk_hash(data):
+    from drk_hash import getPoWHash
+    hsh = getPoWHash(data)
     return hsh
