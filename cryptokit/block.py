@@ -8,9 +8,75 @@ from itertools import tee, islice, zip_longest
 from binascii import unhexlify, hexlify
 from struct import pack, unpack
 
+import StringIO
+
 from . import BitcoinEncoding, target_unpack, reverse_hash, uint256_from_str
 from .transaction import Transaction
+from .vote import CMasterNodeVote
 from .bitcoin import data as bitcoin_data
+from .base58 import b58decode
+
+
+def ser_vector(l):
+    r = ""
+    if len(l) < 253:
+        r = chr(len(l))
+    elif len(l) < 0x10000:
+        r = chr(253) + pack("<H", len(l))
+    elif len(l) < 0x100000000L:
+        r = chr(254) + pack("<I", len(l))
+    else:
+        r = chr(255) + pack("<Q", len(l))
+    for i in l:
+        r += i.serialize()
+    return r
+
+
+def deser_vector(f, c):
+    nit = unpack("<B", f.read(1))[0]
+    if nit == 253:
+        nit = unpack("<H", f.read(2))[0]
+    elif nit == 254:
+        nit = unpack("<I", f.read(4))[0]
+    elif nit == 255:
+        nit = unpack("<Q", f.read(8))[0]
+    r = []
+    for i in xrange(nit):
+        t = c()
+        t.deserialize(f)
+        r.append(t)
+    return r
+
+
+def doublesha(b):
+    return sha256(sha256(b).digest()).digest()
+
+
+def address_to_pubkeyhash(addr):
+    try:
+        addr = b58decode(addr, 25)
+    except:
+        return None
+
+    if addr is None:
+        return None
+
+    ver = addr[0]
+    cksumA = addr[-4:]
+    cksumB = doublesha(addr[:-4])[:4]
+
+    if cksumA != cksumB:
+        return None
+
+    return (ver, addr[1:-4])
+
+
+def script_to_address(addr):
+    d = address_to_pubkeyhash(addr)
+    if not d:
+        raise ValueError('invalid address')
+    (ver, pubkeyhash) = d
+    return b'\x76\xa9\x14' + pubkeyhash + b'\x88\xac'
 
 
 def pairwise(iterator):
@@ -108,6 +174,9 @@ class BlockTemplate(BitcoinEncoding):
         # lazy loaded...
         self._merklebranch = None
         self.coinbase = None
+        # VoteMasterNode
+        self.vmn = []
+        self.masternode_payments = False
 
     @classmethod
     def from_gbt(cls, retval, coinbase, extra_length=0, transactions=None):
@@ -118,6 +187,7 @@ class BlockTemplate(BitcoinEncoding):
         put into the block. """
         if transactions is None:
             transactions = []
+
         coinbase1, coinbase2 = coinbase.assemble(split=True)
         inst = cls()
         inst.hashprev = unhexlify(reverse_hash(retval['previousblockhash']))
@@ -125,6 +195,13 @@ class BlockTemplate(BitcoinEncoding):
         inst.bits = unhexlify(retval['bits'])
         inst.version = retval['version']
         inst.total_value = retval['coinbasevalue']
+        inst.masternode_payments = retval.get('masternode_payments')
+
+        for vote in retval.get('votes', []):
+            v = CMasterNodeVote()
+            v.deserialize(StringIO.StringIO(unhexlify(vote)))
+            inst.vmn.append(v)
+
         # chop the padding off the coinbase1 for extranonces to be put
         if extra_length > 0:
             inst.coinbase1 = coinbase1[:-1 * extra_length]
@@ -286,6 +363,8 @@ class BlockTemplate(BitcoinEncoding):
         # and all the transaction raw values
         for trans in self.transactions:
             block += trans.raw
+        if self.masternode_payments:
+            block += ser_vector(self.vmn)
         return block
 
 
