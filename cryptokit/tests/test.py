@@ -1,0 +1,1 @@
+import heavycoin_hash
