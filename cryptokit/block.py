@@ -5,7 +5,7 @@ from struct import pack
 import StringIO
 import json
 
-from . import BitcoinEncoding, target_unpack, reverse_hash, uint256_from_str, sha256d, double_hash
+from . import BitcoinEncoding, target_unpack, reverse_hash, uint256_from_str, sha256d
 from .transaction import Transaction
 from .dark import CMasterNodeVote, ser_vector
 
@@ -17,7 +17,6 @@ def pairwise(iterator):
     a, b = tee(iterator)
     return izip_longest(islice(a, 0, None, 2), islice(b, 1, None, 2))
 
-@double_hash
 def merkleroot(iterator, be=False, hashes=False, hash_func=sha256d):
     """ When given an iterator producing Transaction objects or transaction
     hashes (set hash=True, send in big endian) this computes a MerkleRoot for
@@ -31,7 +30,8 @@ def merkleroot(iterator, be=False, hashes=False, hash_func=sha256d):
     # get the hashes of all the transactions
     if not hashes:
         # sbwdlihao:It seems should be t.hash beacause hash is little endian
-        h_list = [t.behash for t in iterator]
+        # h_list = [t.behash for t in iterator]
+        h_list = [t.hash for t in iterator]
     else:
         h_list = iterator
 
@@ -45,8 +45,7 @@ def merkleroot(iterator, be=False, hashes=False, hash_func=sha256d):
         return h_list[0][::-1], size
     return h_list[0], size
 
-@double_hash
-def merklebranch(iterator, be=True, hashes=False, hash_func=sha256d):
+def merklebranch(iterator, be=False, hashes=False, hash_func=sha256d):
     """ Similar to the above method, this instead generates a merkle branch
     for mining clients to quickly re-calculate the merkle root with minimum
     of re-hashes while chaning the coinbase extranonce. Big endian by default,
@@ -58,7 +57,9 @@ def merklebranch(iterator, be=True, hashes=False, hash_func=sha256d):
 
     # put a placeholder in our level zero that pretends to be the coinbase
     if not hashes:
-        h_list = [None] + [t.behash for t in iterator]
+        # sbwdlihao:It seems should be t.hash beacause hash is little endian
+        # h_list = [None] + [t.behash for t in iterator]
+        h_list = [None] + [t.hash for t in iterator]
     else:
         h_list = [None] + list(iterator)
     branch = []
@@ -67,20 +68,26 @@ def merklebranch(iterator, be=True, hashes=False, hash_func=sha256d):
     while len(h_list) > 1:
         # left most is what will be recomputed, we want the one right of the
         # leftmost
+        # sbwdlihao:It seems should turn over
+        # if be:
+        #     branch.append(h_list[1])
+        # else:
+        #     branch.append(h_list[1][::-1])
         if be:
-            branch.append(h_list[1])
-        else:
             branch.append(h_list[1][::-1])
+        else:
+            branch.append(h_list[1])
         h_list = [shamaster(h1, h2) for h1, h2 in pairwise(h_list)]
     return branch
 
-@double_hash
 def from_merklebranch(branch_list, coinbase, be=False, hash_func=sha256d):
     """ Computes a merkle root from a branch_list and a coinbase hash. Assumes
     branch_list is a list of little endian byte arrays of hash values, as is
     returned by merklebranch by default. Coinbase is expected to be a
     Transaction object. """
-    root = coinbase.behash
+    # sbwdlihao:It seems should be coinbase.hash beacause hash is little endian
+    # root = coinbase.behash
+    root = coinbase.hash
     for node in branch_list:
         root = hash_func(root + node)
 

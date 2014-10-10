@@ -6,7 +6,7 @@ import unittest
 from cryptokit.base58 import get_bcaddress_version, get_bcaddress, b58encode, b58decode
 from cryptokit.transaction import Input, Transaction, Output
 from cryptokit.block import BlockTemplate, from_merklebranch, merklebranch, merkleroot
-from cryptokit import target_unpack, target_from_diff, Hash, uint256_from_str, bits_to_difficulty, bits_to_shares
+from cryptokit import target_unpack, target_from_diff, Hash, uint256_from_str, bits_to_difficulty, bits_to_shares, hvc_hash
 
 from hashlib import sha256
 from binascii import unhexlify, hexlify
@@ -38,8 +38,7 @@ class TestMerkleRoot(unittest.TestCase):
         deserial = [unhexlify(hsh)[::-1] for hsh in hashes]
         fake_coinbase = Transaction()
         fake_coinbase._hash = deserial[0]
-        branch = merklebranch(deserial[1:], hashes=True, be=True)
-        print hexlify(from_merklebranch(branch, fake_coinbase))
+        branch = merklebranch(deserial[1:], hashes=True)
 
         self.assertEquals(
             "652a365df3f5498cc5e9c578f20df9607a739c659711efa35cdc74f247410dc5",
@@ -47,7 +46,45 @@ class TestMerkleRoot(unittest.TestCase):
 
         self.assertEquals(
             "652a365df3f5498cc5e9c578f20df9607a739c659711efa35cdc74f247410dc5",
-            hexlify(from_merklebranch(branch, fake_coinbase)))
+            hexlify(from_merklebranch(branch, fake_coinbase, True)))
+
+    def test_from_merkle_hvc(self):
+        hashes = [
+            u'0511ad21ba69ece737568f72f925b068807aedb0f329aba76d8c9ccffd68add9',
+            u'fbd125fba1d3dcd0852abfefbb21a78b0fbf3627ede4a0c7180f023564bc047c',
+            u'57930b0987f5974b6637ba33eacf1a8c659ada1ef24a199003b39a2879ad2a13',
+            u'56183660728d5890468f96b7e0c4c7b69ec370557375700cdd8ec2bbf4f774f7',
+            ]
+        deserial = [unhexlify(hsh)[::-1] for hsh in hashes]
+        fake_coinbase = Transaction(hash_func=hvc_hash)
+        fake_coinbase._hash = deserial[0]
+        branch = merklebranch(deserial[1:], hashes=True, hash_func=hvc_hash)
+
+        self.assertEquals(
+            "bf97c8ac14a0c115598e2d06f4522b332415a568a0f16330d8f8317534829160",
+            hexlify(merkleroot(deserial, hashes=True, be=True, hash_func=hvc_hash)[0]).decode('ascii'))
+
+        self.assertEquals(
+            "bf97c8ac14a0c115598e2d06f4522b332415a568a0f16330d8f8317534829160",
+            hexlify(from_merklebranch(branch, fake_coinbase, True, hash_func=hvc_hash)))
+
+    def test_from_merkle_mls(self):
+        hashes = [
+            u'044af3d25dd487c982e85ff45c40d41561bcdc3477174862460db9583143beaa',
+            u'4e6c02a0ab2ba51e9da9c10556b293a708884030b4145f5fa5357372c71a836f',
+            ]
+        deserial = [unhexlify(hsh)[::-1] for hsh in hashes]
+        fake_coinbase = Transaction(hash_func=hvc_hash)
+        fake_coinbase._hash = deserial[0]
+        branch = merklebranch(deserial[1:], hashes=True, hash_func=hvc_hash)
+
+        self.assertEquals(
+            "dcef589f3e0b3ce034709b16d59543aae3ea19897ccea87778072537aa7ce8a2",
+            hexlify(merkleroot(deserial, hashes=True, be=True, hash_func=hvc_hash)[0]).decode('ascii'))
+
+        self.assertEquals(
+            "dcef589f3e0b3ce034709b16d59543aae3ea19897ccea87778072537aa7ce8a2",
+            hexlify(from_merklebranch(branch, fake_coinbase, True, hash_func=hvc_hash)))
 
 
 class TestBlockTemplate(unittest.TestCase):

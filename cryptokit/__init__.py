@@ -11,19 +11,14 @@ def sha256d(data):
     return hsh
 
 def hvc_hash(data):
-    return heavycoin_hash.getHash(data)
+    return heavycoin_hash.getHash(data, len(data))
 
-def double_hash(func):
-    def wrapper(*args, **kw):
+def get_hash_func(coin=None):
+    if coin == 'HVC':
+        hash_func = hvc_hash
+    else:
         hash_func = sha256d
-        if kw.has_key('coin'):
-            coin = kw['coin']
-            if coin == 'HVC':
-                hash_func = hvc_hash
-        kw['hash_func'] = hash_func
-        return func(*args, **kw)
-    return wrapper
-
+    return hash_func
 
 def _swap4(s):
     if len(s) % 4:

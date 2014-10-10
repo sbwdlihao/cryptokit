@@ -1,5 +1,5 @@
 """ Copied from https://bitcointalk.org/index.php?topic=1026.0 (public domain) """
-from . import sha256d, double_hash
+from . import sha256d
 
 if str != bytes:
     def ord(c):
@@ -82,7 +82,6 @@ def _parse_address(str_address, hash_func=sha256d):
                              .format(str_address))
     return ord(version), raw[1:-4]
 
-@double_hash
 def get_bcaddress_version(str_address, hash_func=sha256d):
     """ Reverse compatibility non-python implementation """
     try:
@@ -90,7 +89,6 @@ def get_bcaddress_version(str_address, hash_func=sha256d):
     except AttributeError:
         return None
 
-@double_hash
 def get_bcaddress(str_address, hash_func=sha256d):
     """ Reverse compatibility non-python implementation """
     try:
@@ -98,10 +96,8 @@ def get_bcaddress(str_address, hash_func=sha256d):
     except AttributeError:
         return None
 
-@double_hash
 def address_version(str_address, hash_func=sha256d):
     return _parse_address(str_address, hash_func)[0]
 
-@double_hash
 def address_bytes(str_address, hash_func=sha256d):
     return _parse_address(str_address, hash_func)[1]
