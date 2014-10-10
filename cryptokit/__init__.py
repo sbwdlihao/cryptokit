@@ -1,5 +1,6 @@
 from __future__ import unicode_literals
 from hashlib import sha256
+import heavycoin_hash
 from struct import pack, unpack
 from collections import namedtuple
 from binascii import unhexlify, hexlify
@@ -8,6 +9,20 @@ from binascii import unhexlify, hexlify
 def sha256d(data):
     hsh = sha256(sha256(data).digest()).digest()
     return hsh
+
+def hvc_hash(data):
+    return heavycoin_hash.getHash(data)
+
+def double_hash(func):
+    def wrapper(*args, **kw):
+        hash_func = sha256d
+        if kw.has_key('coin'):
+            coin = kw['coin']
+            if coin == 'HVC':
+                hash_func = hvc_hash
+        kw['hash_func'] = hash_func
+        return func(*args, **kw)
+    return wrapper
 
 
 def _swap4(s):

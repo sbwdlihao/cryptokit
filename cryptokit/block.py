@@ -1,4 +1,3 @@
-from hashlib import sha256
 from itertools import tee, islice, izip_longest
 from binascii import unhexlify, hexlify
 from struct import pack
@@ -6,7 +5,7 @@ from struct import pack
 import StringIO
 import json
 
-from . import BitcoinEncoding, target_unpack, reverse_hash, uint256_from_str
+from . import BitcoinEncoding, target_unpack, reverse_hash, uint256_from_str, sha256d, double_hash
 from .transaction import Transaction
 from .dark import CMasterNodeVote, ser_vector
 
@@ -18,15 +17,20 @@ def pairwise(iterator):
     a, b = tee(iterator)
     return izip_longest(islice(a, 0, None, 2), islice(b, 1, None, 2))
 
-
-def merkleroot(iterator, be=False, hashes=False):
+@double_hash
+def merkleroot(iterator, be=False, hashes=False, hash_func=sha256d):
     """ When given an iterator producing Transaction objects or transaction
     hashes (set hash=True, send in big endian) this computes a MerkleRoot for
     the collection of transactions. Returned as big endian byte string by
     default with second parameter as size of iterator. Could be optimized to
-    use the list in place, but thats a future job... """
+    use the list in place, but thats a future job... 
+
+    sbwdlihao:It seems transaction hashes should be in little endian, and return 
+    a little byte string by default
+    """
     # get the hashes of all the transactions
     if not hashes:
+        # sbwdlihao:It seems should be t.hash beacause hash is little endian
         h_list = [t.behash for t in iterator]
     else:
         h_list = iterator
@@ -34,15 +38,15 @@ def merkleroot(iterator, be=False, hashes=False):
     size = len(h_list)
     # build our tree by repeated halving of the list
     while len(h_list) > 1:
-        h_list = [sha256(sha256(h1 + (h2 or h1)).digest()).digest()
+        h_list = [hash_func(h1 + (h2 or h1))
                   for h1, h2 in pairwise(h_list)]
     # return little endian
     if be:
         return h_list[0][::-1], size
     return h_list[0], size
 
-
-def merklebranch(iterator, be=True, hashes=False):
+@double_hash
+def merklebranch(iterator, be=True, hashes=False, hash_func=sha256d):
     """ Similar to the above method, this instead generates a merkle branch
     for mining clients to quickly re-calculate the merkle root with minimum
     of re-hashes while chaning the coinbase extranonce. Big endian by default,
@@ -50,7 +54,7 @@ def merklebranch(iterator, be=True, hashes=False):
     def shamaster(h1, h2):
         if h1 is None:
             return None
-        return sha256(sha256(h1 + (h2 or h1)).digest()).digest()
+        return hash_func(h1 + (h2 or h1))
 
     # put a placeholder in our level zero that pretends to be the coinbase
     if not hashes:
@@ -58,6 +62,7 @@ def merklebranch(iterator, be=True, hashes=False):
     else:
         h_list = [None] + list(iterator)
     branch = []
+
     # build each level of the tree and pull out the leftmost non-None
     while len(h_list) > 1:
         # left most is what will be recomputed, we want the one right of the
@@ -69,15 +74,15 @@ def merklebranch(iterator, be=True, hashes=False):
         h_list = [shamaster(h1, h2) for h1, h2 in pairwise(h_list)]
     return branch
 
-
-def from_merklebranch(branch_list, coinbase, be=False):
+@double_hash
+def from_merklebranch(branch_list, coinbase, be=False, hash_func=sha256d):
     """ Computes a merkle root from a branch_list and a coinbase hash. Assumes
     branch_list is a list of little endian byte arrays of hash values, as is
     returned by merklebranch by default. Coinbase is expected to be a
     Transaction object. """
     root = coinbase.behash
     for node in branch_list:
-        root = sha256(sha256(root + node).digest()).digest()
+        root = hash_func(root + node)
 
     # return be if requested
     if be:
@@ -112,6 +117,10 @@ class BlockTemplate(BitcoinEncoding):
         self.vmn = []
         self.masternode_payments = False
 
+        # Heavycoin maxvote and reward
+        self.hvc_maxvote = 1024
+        self.hvc_reward = None
+
     @classmethod
     def from_gbt(cls, retval, coinbase, extra_length=0, transactions=None):
         """ Creates a block template object from a get block template call
@@ -135,6 +144,11 @@ class BlockTemplate(BitcoinEncoding):
             v = CMasterNodeVote()
             v.deserialize(StringIO.StringIO(unhexlify(vote)))
             inst.vmn.append(v)
+
+        # Heavycoin
+        inst.hvc_reward = retval.get('reward')
+        if retval.has_key('maxvote'):
+            inst.hvc_maxvote = retval['maxvote']
 
         # chop the padding off the coinbase1 for extranonces to be put
         if extra_length > 0:

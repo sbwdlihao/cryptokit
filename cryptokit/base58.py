@@ -1,6 +1,5 @@
 """ Copied from https://bitcointalk.org/index.php?topic=1026.0 (public domain) """
-from hashlib import sha256
-
+from . import sha256d, double_hash
 
 if str != bytes:
     def ord(c):
@@ -67,7 +66,9 @@ def b58decode(v, length):
     return result
 
 
-def _parse_address(str_address):
+
+
+def _parse_address(str_address, hash_func=sha256d):
     raw = b58decode(str_address, 25)
     if raw is None:
         raise AttributeError("'{}' is invalid base58 of decoded length 25"
@@ -75,32 +76,32 @@ def _parse_address(str_address):
     version = raw[0]
     checksum = raw[-4:]
     vh160 = raw[:-4]  # Version plus hash160 is what is checksummed
-    h3 = sha256(sha256(vh160).digest()).digest()
+    h3 = hash_func(vh160)
     if h3[0:4] != checksum:
         raise AttributeError("'{}' has an invalid address checksum"
                              .format(str_address))
     return ord(version), raw[1:-4]
 
-
-def get_bcaddress_version(str_address):
+@double_hash
+def get_bcaddress_version(str_address, hash_func=sha256d):
     """ Reverse compatibility non-python implementation """
     try:
-        return _parse_address(str_address)[0]
+        return _parse_address(str_address, hash_func)[0]
     except AttributeError:
         return None
 
-
-def get_bcaddress(str_address):
+@double_hash
+def get_bcaddress(str_address, hash_func=sha256d):
     """ Reverse compatibility non-python implementation """
     try:
-        return _parse_address(str_address)[1]
+        return _parse_address(str_address, hash_func)[1]
     except AttributeError:
         return None
 
+@double_hash
+def address_version(str_address, hash_func=sha256d):
+    return _parse_address(str_address, hash_func)[0]
 
-def address_version(str_address):
-    return _parse_address(str_address)[0]
-
-
-def address_bytes(str_address):
-    return _parse_address(str_address)[1]
+@double_hash
+def address_bytes(str_address, hash_func=sha256d):
+    return _parse_address(str_address, hash_func)[1]
