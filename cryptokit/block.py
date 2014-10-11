@@ -5,7 +5,7 @@ from struct import pack
 import StringIO
 import json
 
-from . import BitcoinEncoding, target_unpack, reverse_hash, uint256_from_str, sha256d
+from . import BitcoinEncoding, target_unpack, reverse_hash, uint256_from_str, sha256d, get_hash_func
 from .transaction import Transaction
 from .dark import CMasterNodeVote, ser_vector
 
@@ -100,7 +100,7 @@ def from_merklebranch(branch_list, coinbase, be=False, hash_func=sha256d):
 class BlockTemplate(BitcoinEncoding):
     """ An object for encapsulating common block header/template type actions.
     """
-    def __init__(self, raw=None):
+    def __init__(self, raw=None, coin=None):
         # little endian bytes
         self.hashprev = None
         # ints
@@ -120,16 +120,21 @@ class BlockTemplate(BitcoinEncoding):
         self._merklebranch = None
         self.coinbase = None
 
+        self.coin = coin
+        self._hash_func = get_hash_func(self.coin)
+
         # Darkcoin Masternode Voting
         self.vmn = []
         self.masternode_payments = False
 
-        # Heavycoin maxvote and reward
-        self.hvc_maxvote = 1024
-        self.hvc_reward = None
+        if coin == 'HVC':
+            self.maxvote = 1024
+        else:
+            self.maxvote = 0 # MLS vote is allways 0
+        self.reward = None # Heavycoin, Mozzshare
 
     @classmethod
-    def from_gbt(cls, retval, coinbase, extra_length=0, transactions=None):
+    def from_gbt(cls, retval, coinbase, extra_length=0, transactions=None, coin=None):
         """ Creates a block template object from a get block template call
         and a coinbase transaction object. extra_length needs to be the length
         of padding that was added for extranonces (both 1 and 2 if added).
@@ -143,7 +148,7 @@ class BlockTemplate(BitcoinEncoding):
         inst.ntime = retval['curtime']
         inst.bits = unhexlify(retval['bits'])
         inst.version = retval['version']
-        inst.total_value = retval['coinbasevalue']
+        inst.total_value = retval.get('coinbasevalue')
 
         # Darkcoin
         inst.masternode_payments = retval.get('masternode_payments')
@@ -152,10 +157,9 @@ class BlockTemplate(BitcoinEncoding):
             v.deserialize(StringIO.StringIO(unhexlify(vote)))
             inst.vmn.append(v)
 
-        # Heavycoin
-        inst.hvc_reward = retval.get('reward')
+        inst.reward = retval.get('reward')
         if retval.has_key('maxvote'):
-            inst.hvc_maxvote = retval['maxvote']
+            inst.maxvote = retval.get('maxvote')
 
         # chop the padding off the coinbase1 for extranonces to be put
         if extra_length > 0:
@@ -164,6 +168,8 @@ class BlockTemplate(BitcoinEncoding):
             inst.coinbase1 = coinbase1
         inst.coinbase2 = coinbase2
         inst.transactions = transactions
+        inst.coin = coin
+        inst._hash_func = get_hash_func(coin)
         return inst
 
     # MERKLE_BRANCH
@@ -172,7 +178,7 @@ class BlockTemplate(BitcoinEncoding):
     def merklebranch_be(self):
         """ Generate (or cache) merkle branch in be bytes """
         if self._merklebranch is None:
-            self._merklebranch = merklebranch(self.transactions)
+            self._merklebranch = merklebranch(self.transactions, be=True, hashes=False, hash_func=self._hash_func)
         return self._merklebranch
 
     @property
@@ -244,7 +250,7 @@ class BlockTemplate(BitcoinEncoding):
     def merkleroot_be(self, coinbase):
         """ Accepts coinbase transaction object and returns what the merkleroot
         would be for this template """
-        return from_merklebranch(self.merklebranch_be, coinbase, be=True)
+        return from_merklebranch(self.merklebranch_le, coinbase, be=True, hash_func=self._hash_func)
 
     def merkleroot_le(self, coinbase):
         return self.merkleroot_be(coinbase)[::-1]
@@ -258,11 +264,37 @@ class BlockTemplate(BitcoinEncoding):
             r >>= 32
         return rs[::-1]
 
+    # HVC,MLS
+    # =================================================
+    @property
+    def reward_be(self):
+        return pack(str(">H"), self.reward)
+
+    @property
+    def reward_le(self):
+        return pack(str("<H"), self.reward)
+
+    @property
+    def reward_be_hex(self):
+        return hexlify(self.reward_be)
+
+    @property
+    def maxvote_be(self):
+        return pack(str(">H"), self.maxvote)
+
+    @property
+    def maxvote_le(self):
+        return pack(str("<H"), self.maxvote)
+
+    @property
+    def maxvote_be_hex(self):
+        return hexlify(self.maxvote_be)
+
     @property
     def fee_total(self):
         return sum([t.fees or 0 for t in self.transactions])
 
-    def block_header(self, nonce, extra1, extra2, ntime=None):
+    def block_header(self, nonce, extra1, extra2, ntime=None, nvote = None):
         """ Builds a block header given nonces and extranonces. Assumes extra1
         and extra2 are bytes of the proper length from when the coinbase
         fragments were originally generated (either manually, or using
@@ -277,7 +309,7 @@ class BlockTemplate(BitcoinEncoding):
 
         coinbase_raw = self.coinbase1 + unhexlify(extra1) + unhexlify(extra2)
         coinbase_raw += self.coinbase2
-        self.coinbase = Transaction(coinbase_raw)
+        self.coinbase = Transaction(coinbase_raw, coin=self.coin)
         #coinbase.disassemble() for testing to ensure proper coinbase constr
 
         header = self.version_be
@@ -292,12 +324,25 @@ class BlockTemplate(BitcoinEncoding):
                 raise AttributeError("ntime must be hex string")
         header += self.bits_be
         header += unhexlify(nonce)
-        return b''.join([header[i*4:i*4+4][::-1] for i in range(0, 20)])
+
+        r = [header[i*4:i*4+4][::-1] for i in range(0, 20)]
+
+        if self.coin == 'HVC' or self.coin == 'MLS':
+            if nvote is None:
+                r.append(self.maxvote_le)
+            else:
+                if isinstance(nvote, basestring):
+                    r.append(unhexlify(nvote))
+                else:
+                    raise AttributeError("nvote must be hex string")
+            r.append(self.reward_le)
+            
+        return b''.join(r)
 
     def stratum_params(self):
         """ Generates a list of values to be passed to a work command for
         stratum minus the flush value """
-        return [self.job_id,
+        params = [self.job_id,
                 self.hashprev_le_hex,
                 hexlify(self.coinbase1),
                 hexlify(self.coinbase2),
@@ -305,6 +350,10 @@ class BlockTemplate(BitcoinEncoding):
                 self.version_be_hex,
                 self.bits_be_hex,
                 self.ntime_be_hex]
+        if self.coin == 'HVC' or self.coin == 'MLS':
+            params.append(self.reward_be_hex)
+            params.append(self.maxvote_be_hex)
+        return params
 
     def stratum_string(self):
         if not self._stratum_string:

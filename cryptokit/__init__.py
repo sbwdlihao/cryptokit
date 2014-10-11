@@ -13,8 +13,11 @@ def sha256d(data):
 def hvc_hash(data):
     return heavycoin_hash.getHash(data, len(data))
 
+def hvc_powhash(data):
+    return heavycoin_hash.getPoWHash(data)
+
 def get_hash_func(coin=None):
-    if coin == 'HVC':
+    if coin == 'HVC' or coin == 'MLS':
         hash_func = hvc_hash
     else:
         hash_func = sha256d

@@ -6,7 +6,7 @@ from struct import pack
 from collections import namedtuple
 from binascii import hexlify
 
-from . import BitcoinEncoding, sha256d
+from . import BitcoinEncoding, get_hash_func
 from .base58 import address_bytes
 from .bitcoin.script import create_push_script
 
@@ -42,7 +42,7 @@ class Transaction(BitcoinEncoding):
     raw format at https://en.bitcoin.it/wiki/Transactions. """
     _nullprev = b'\0' * 32
 
-    def __init__(self, raw=None, fees=None, disassemble=False, hash_func=sha256d):
+    def __init__(self, raw=None, fees=None, disassemble=False, coin=None):
         # raw transaction data in byte format
         if raw:
             if not isinstance(raw, (bytearray, newbytes.newbytes)):
@@ -59,7 +59,8 @@ class Transaction(BitcoinEncoding):
         self.version = 1
         # stored as le bytes
         self._hash = None
-        self._hash_func = hash_func
+        self.coin = coin
+        self._hash_func = get_hash_func(coin)
         if disassemble:
             self.disassemble()
 
@@ -172,7 +173,7 @@ class Transaction(BitcoinEncoding):
     def hash(self):
         """ Compute the hash of the transaction when needed """
         if self._hash is None:
-            self._hash = self._hash_func(self._raw)[::-1]
+            self._hash = self._hash_func(self._raw)
         return self._hash
     lehash = hash
 
