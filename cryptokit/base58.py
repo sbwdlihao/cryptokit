@@ -1,5 +1,5 @@
 """ Copied from https://bitcointalk.org/index.php?topic=1026.0 (public domain) """
-from . import sha256d
+from . import sha256d, hvc_hash
 
 if str != bytes:
     def ord(c):
@@ -65,10 +65,7 @@ def b58decode(v, length):
 
     return result
 
-
-
-
-def _parse_address(str_address, hash_func=sha256d):
+def _parse_address(str_address):
     raw = b58decode(str_address, 25)
     if raw is None:
         raise AttributeError("'{}' is invalid base58 of decoded length 25"
@@ -76,28 +73,30 @@ def _parse_address(str_address, hash_func=sha256d):
     version = raw[0]
     checksum = raw[-4:]
     vh160 = raw[:-4]  # Version plus hash160 is what is checksummed
-    h3 = hash_func(vh160)
-    if h3[0:4] != checksum:
-        raise AttributeError("'{}' has an invalid address checksum"
+    hash_funcs = [sha256d, hvc_hash]
+    while(len(hash_funcs) > 0):
+        h3 = hash_funcs.pop(0)(vh160)
+        if h3[0:4] == checksum:
+            return ord(version), raw[1:-4]
+    raise AttributeError("'{}' has an invalid address checksum"
                              .format(str_address))
-    return ord(version), raw[1:-4]
 
-def get_bcaddress_version(str_address, hash_func=sha256d):
+def get_bcaddress_version(str_address):
     """ Reverse compatibility non-python implementation """
     try:
-        return _parse_address(str_address, hash_func)[0]
+        return _parse_address(str_address)[0]
     except AttributeError:
         return None
 
-def get_bcaddress(str_address, hash_func=sha256d):
+def get_bcaddress(str_address):
     """ Reverse compatibility non-python implementation """
     try:
-        return _parse_address(str_address, hash_func)[1]
+        return _parse_address(str_address)[1]
     except AttributeError:
         return None
 
-def address_version(str_address, hash_func=sha256d):
-    return _parse_address(str_address, hash_func)[0]
+def address_version(str_address):
+    return _parse_address(str_address)[0]
 
-def address_bytes(str_address, hash_func=sha256d):
-    return _parse_address(str_address, hash_func)[1]
+def address_bytes(str_address):
+    return _parse_address(str_address)[1]

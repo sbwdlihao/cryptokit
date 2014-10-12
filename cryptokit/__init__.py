@@ -16,9 +16,12 @@ def hvc_hash(data):
 def hvc_powhash(data):
     return heavycoin_hash.getPoWHash(data)
 
-def get_hash_func(coin=None):
+def get_hash_func(coin=None, for_block=False):
     if coin == 'HVC' or coin == 'MLS':
-        hash_func = hvc_hash
+        if for_block:
+            hash_func = hvc_powhash
+        else:
+            hash_func = hvc_hash
     else:
         hash_func = sha256d
     return hash_func
@@ -92,9 +95,8 @@ class Hash(namedtuple('Hash', ['hash'], verbose=False)):
     def be_bytes(self):
         return self[0][::-1]
 
-    def sha(self, other):
-        return Hash.from_be_bytes(sha256(sha256(
-            self.be_bytes + other.be_bytes).digest()).digest())
+    def sha(self, other, hash_func=sha256d):
+        return Hash.from_be_bytes(hash_func(self.be_bytes + other.be_bytes))
 
 
 class BitcoinEncoding(object):

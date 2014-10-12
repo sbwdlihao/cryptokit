@@ -7,12 +7,11 @@ from cryptokit.base58 import get_bcaddress_version, get_bcaddress, b58encode, b5
 from cryptokit.transaction import Input, Transaction, Output
 from cryptokit.block import BlockTemplate, from_merklebranch, merklebranch, merkleroot
 from cryptokit import target_unpack, target_from_diff, Hash, uint256_from_str, bits_to_difficulty, bits_to_shares, sha256d, hvc_hash, hvc_powhash
+from cryptokit.bitcoin import data
 
-from hashlib import sha256
 from binascii import unhexlify, hexlify
 from pprint import pprint
 from struct import pack
-
 
 class TestHashTuple(unittest.TestCase):
     def test_hash_hex(self):
@@ -24,6 +23,12 @@ class TestHashTuple(unittest.TestCase):
         self.assertEquals(
             "8c7a185625a72b20a2750b59ef8fc6384e277b6d93cc42c6b30426c373f4ded4",
             hsh.be_hex)
+
+    def test_sha(self):
+        a = Hash.from_be_hex("0549ac6ce7c0256174f29aec802d59ad5dcd49da0160f55b793bf056b0ab87d3")
+        b = Hash.from_be_hex("e010c10d8b9a7ab835498f160ed1ab585d4a5d30f88d431988254ec9120371cf")
+        sha = a.sha(b)
+        print sha.be_hex
 
 
 class TestMerkleRoot(unittest.TestCase):
@@ -56,7 +61,7 @@ class TestMerkleRoot(unittest.TestCase):
             u'56183660728d5890468f96b7e0c4c7b69ec370557375700cdd8ec2bbf4f774f7',
             ]
         deserial = [unhexlify(hsh)[::-1] for hsh in hashes]
-        fake_coinbase = Transaction(hash_func=hvc_hash)
+        fake_coinbase = Transaction(coin='HVC')
         fake_coinbase._hash = deserial[0]
         branch = merklebranch(deserial[1:], hashes=True, hash_func=hvc_hash)
 
@@ -74,7 +79,7 @@ class TestMerkleRoot(unittest.TestCase):
             u'4e6c02a0ab2ba51e9da9c10556b293a708884030b4145f5fa5357372c71a836f',
             ]
         deserial = [unhexlify(hsh)[::-1] for hsh in hashes]
-        fake_coinbase = Transaction(hash_func=hvc_hash)
+        fake_coinbase = Transaction(coin='HVC')
         fake_coinbase._hash = deserial[0]
         branch = merklebranch(deserial[1:], hashes=True, hash_func=hvc_hash)
 
@@ -275,7 +280,7 @@ class TestBlockTemplate(unittest.TestCase):
         # build a block template object from the raw data
         coinbase = Transaction()
         coinbase.version = 2
-        coinbase.inputs.append(Input.coinbase(gbt['height'], b'\0' * 12))
+        coinbase.inputs.append(Input.coinbase(gbt['height'], [b'\0' * 12]))
         coinbase.outputs.append(Output.to_address(gbt['coinbasevalue'], 'D7QJyeBNuwEqxsyVCLJi3pHs64uPdMDuBa'))
 
         transactions = []
@@ -290,12 +295,8 @@ class TestBlockTemplate(unittest.TestCase):
               .format(*send_params))
 
         header = bt.block_header(submit['nonce'], extra1, submit['extra2'])
-        hash_bin = scrypt(header)
         target = target_from_diff(1, 0x0000FFFF00000000000000000000000000000000000000000000000000000000)
-
-        hash_int = uint256_from_str(hash_bin)
-        hash_hex = "%064x" % hash_int
-        self.assertEquals(hash_hex, submit['result'])
+        self.assertEquals(hexlify(sha256d(header)[::-1]).decode('ascii'), submit['result'])
         assert hash_int < target
 
 
@@ -337,11 +338,11 @@ class TestUtil(unittest.TestCase):
 
     def test_address(self):
         # HVC test net
-        self.assertIsNotNone(get_bcaddress_version('mp4hfsv6ESdc3jttjosmVBLdnnhL5wyKJm', 'HVC'))
-        self.assertIsNotNone(get_bcaddress('mp4hfsv6ESdc3jttjosmVBLdnnhL5wyKJm', 'HVC'))
+        self.assertIsNotNone(get_bcaddress_version('mp4hfsv6ESdc3jttjosmVBLdnnhL5wyKJm'))
+        self.assertIsNotNone(get_bcaddress('mp4hfsv6ESdc3jttjosmVBLdnnhL5wyKJm'))
         # HVC main net
-        self.assertIsNotNone(get_bcaddress_version('HR2KQ3qRWJ3yQhdivJLVVEScUg1EMp6EZH', 'HVC'))
-        self.assertIsNotNone(get_bcaddress('HR2KQ3qRWJ3yQhdivJLVVEScUg1EMp6EZH', 'HVC'))
+        self.assertIsNotNone(get_bcaddress_version('HR2KQ3qRWJ3yQhdivJLVVEScUg1EMp6EZH'))
+        self.assertIsNotNone(get_bcaddress('HR2KQ3qRWJ3yQhdivJLVVEScUg1EMp6EZH'))
         # BTC,LTC... test net
         self.assertIsNotNone(get_bcaddress_version('nrJQ8mHB2AndBZiGT5m7ow7DgJeweCxT5n'))
         self.assertIsNotNone(get_bcaddress('nrJQ8mHB2AndBZiGT5m7ow7DgJeweCxT5n'))

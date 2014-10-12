@@ -6,11 +6,12 @@ from __future__ import division
 import hashlib
 import random
 import warnings
+from cryptokit import sha256d
 
 from cryptokit.util import math, pack
 
-def hash256(data):
-    return pack.IntType(256).unpack(hashlib.sha256(hashlib.sha256(data).digest()).digest())
+def hash256(data, hash_func=sha256d):
+    return pack.IntType(256).unpack(sha256d(data))
 
 def hash160(data):
     if data == '04ffd03de44a6e11b9917f3a29f9443283d9871c9d743ef30d5eddcd37094b64d1b3d8090496b53256786bf5c82932ec23c3b74d9f05a6f95a8b5529352656664b'.decode('hex'):
@@ -18,9 +19,11 @@ def hash160(data):
     return pack.IntType(160).unpack(hashlib.new('ripemd160', hashlib.sha256(data).digest()).digest())
 
 class ChecksummedType(pack.Type):
-    def __init__(self, inner, checksum_func=lambda data: hashlib.sha256(hashlib.sha256(data).digest()).digest()[:4]):
+    def __init__(self, inner, checksum_func=None, hash_func=sha256d):
         self.inner = inner
         self.checksum_func = checksum_func
+        if self.checksum_func is None:
+            self.checksum_func = lambda data: hash_func(data)[:4]
 
     def read(self, file):
         obj, file = self.inner.read(file)
@@ -170,16 +173,16 @@ merkle_record_type = pack.ComposedType([
     ('right', pack.IntType(256)),
 ])
 
-def merkle_hash(hashes):
+def merkle_hash(hashes, hash_func=sha256d):
     if not hashes:
         return 0
     hash_list = list(hashes)
     while len(hash_list) > 1:
-        hash_list = [hash256(merkle_record_type.pack(dict(left=left, right=right)))
+        hash_list = [hash256(merkle_record_type.pack(dict(left=left, right=right)), hash_func=hash_func)
             for left, right in zip(hash_list[::2], hash_list[1::2] + [hash_list[::2][-1]])]
     return hash_list[0]
 
-def calculate_merkle_link(hashes, index):
+def calculate_merkle_link(hashes, index, hash_func=sha256d):
     # XXX optimize this
 
     hash_list = [(lambda _h=h: _h, i == index, []) for i, h in enumerate(hashes)]
@@ -187,7 +190,7 @@ def calculate_merkle_link(hashes, index):
     while len(hash_list) > 1:
         hash_list = [
             (
-                lambda _left=left, _right=right: hash256(merkle_record_type.pack(dict(left=_left(), right=_right()))),
+                lambda _left=left, _right=right: hash256(merkle_record_type.pack(dict(left=_left(), right=_right())), hash_func=hash_func),
                 left_f or right_f,
                 (left_l if left_f else right_l) + [dict(side=1, hash=right) if left_f else dict(side=0, hash=left)],
             )
