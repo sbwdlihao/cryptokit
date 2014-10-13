@@ -143,7 +143,7 @@ class BlockTemplate(BitcoinEncoding):
         if transactions is None:
             transactions = []
         coinbase1, coinbase2 = coinbase.assemble(split=True)
-        inst = cls()
+        inst = cls(coin=coin)
         inst.hashprev = unhexlify(reverse_hash(retval['previousblockhash']))
         inst.ntime = retval['curtime']
         inst.bits = unhexlify(retval['bits'])
