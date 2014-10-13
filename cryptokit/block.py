@@ -325,19 +325,18 @@ class BlockTemplate(BitcoinEncoding):
         header += self.bits_be
         header += unhexlify(nonce)
 
-        r = [header[i*4:i*4+4][::-1] for i in range(0, 20)]
-
         if self.coin == 'HVC' or self.coin == 'MLS':
+            header += self.reward_be
             if nvote is None:
-                r.append(self.maxvote_le)
+                header += self.maxvote_be
             else:
                 if isinstance(nvote, basestring):
-                    r.append(unhexlify(nvote))
+                    header += unhexlify(nvote)
                 else:
                     raise AttributeError("nvote must be hex string")
-            r.append(self.reward_le)
-            
-        return b''.join(r)
+            return b''.join([header[i*4:i*4+4][::-1] for i in range(0, 21)])
+        else:
+            return b''.join([header[i*4:i*4+4][::-1] for i in range(0, 20)])
 
     def stratum_params(self):
         """ Generates a list of values to be passed to a work command for

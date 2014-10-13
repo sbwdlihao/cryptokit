@@ -170,7 +170,7 @@ class TestBlockTemplate(unittest.TestCase):
                                        transactions=transactions, coin='HVC')
         self.assertEquals(hexlify(tmplt.merkleroot_be(coinbase)).decode('ascii'),
                           block_data['merkleroot'])
-        header = tmplt.block_header(block_data['nonce'], b'', b'', nvote=hexlify(pack(str("<H"), block_data['vote'])))
+        header = tmplt.block_header(block_data['nonce'], b'', b'', nvote=hexlify(pack(str(">H"), block_data['vote'])))
         self.assertEquals(block_data['hash'], hexlify(hvc_powhash(header)[::-1]).decode('ascii'))
 
     def test_block_header2(self):
