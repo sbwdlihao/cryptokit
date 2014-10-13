@@ -348,7 +348,9 @@ class BlockTemplate(BitcoinEncoding):
                 self.merklebranch_be_hex,
                 self.version_be_hex,
                 self.bits_be_hex,
-                self.ntime_be_hex]
+                self.ntime_be_hex,
+                False, # clean_jobs default False
+                ]
         if self.coin == 'HVC' or self.coin == 'MLS':
             params.append(self.reward_be_hex)
             params.append(self.maxvote_be_hex)

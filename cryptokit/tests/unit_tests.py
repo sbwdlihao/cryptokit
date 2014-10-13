@@ -93,6 +93,10 @@ class TestMerkleRoot(unittest.TestCase):
 
 
 class TestBlockTemplate(unittest.TestCase):
+    def test_block_header5(self):
+        header = unhexlify(u'00f27f10fe9c27d3cbf40c4fc22466ab0cbea54613d86c12aa0903a148208747db8200002a5c88f6026f280fa5de84a88157a3f8f2975ccb884eb8dc6ff86933f3c95897e8c73b54ffff001fd0b9010001000004')
+        self.assertEquals(u'000006172ce7f6757a3c43bfaad363dd2938a1c6392db362c87416d93fef8365', hexlify(hvc_powhash(header)[::-1]).decode('ascii'))
+
     def test_block_header4(self):
         # pulled from mozzshare blockchain and modded slightly with full block header
         block_data = {
