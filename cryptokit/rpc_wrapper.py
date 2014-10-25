@@ -197,7 +197,7 @@ class CoinRPC(object):
         """
 
         # Coerce all amounts to float
-        for k, amount in recip.values():
+        for k, amount in recip.items():
             recip[k] = float(amount)
 
         self.unlock_wallet()
