@@ -345,7 +345,7 @@ class BlockTemplate(BitcoinEncoding):
                 self.hashprev_le_hex,
                 hexlify(self.coinbase1),
                 hexlify(self.coinbase2),
-                self.merklebranch_be_hex,
+                self.merklebranch_le_hex,
                 self.version_be_hex,
                 self.bits_be_hex,
                 self.ntime_be_hex,
