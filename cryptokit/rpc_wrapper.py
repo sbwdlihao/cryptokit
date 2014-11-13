@@ -218,7 +218,7 @@ class CoinRPC(object):
 
     @rpc_conn
     def unlock_wallet(self, seconds=10):
-        if self.coinserv['wallet_pass']:
+        if self.coinserv.has_key('wallet_pass'):
             try:
                 wallet = self.conn.walletpassphrase(self.coinserv['wallet_pass'], seconds)
             except CoinRPCException as e:
